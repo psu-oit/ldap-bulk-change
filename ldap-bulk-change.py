@@ -23,18 +23,20 @@ parser.add_argument('--environment', '-e', nargs="?",
 # TODO: Make verbose do something.
 
 # Command line environment options.
-group = parser.add_argument_group('Connection Arguments', 'Details for the target LDAP server')
-group.add_argument('host', nargs='?', help="The LDAP host URL.")
-group.add_argument('port', nargs='?', help="The LDAP port.", default="636")
-group.add_argument('bind_dn', nargs='?', help="The DN to bind as.")
-group.add_argument('password', nargs='?', help="The password for the bind DN.")
-group.add_argument('base_dn', nargs='?', help="The base DN from which to search.")
+parser.add_argument('--host', nargs='?', help="The LDAP host URL.")
+parser.add_argument('--port', nargs='?', help="The LDAP port.", default="636")
+parser.add_argument('--bind-dn', nargs='?', help="The DN to bind as.")
+parser.add_argument('--password', nargs='?', help="The password for the bind DN.")
+parser.add_argument('--base-dn', nargs='?', help="The base DN from which to search.")
 
 # The action we actually want to take.
-parser.add_argument('filter', nargs=1, help="An LDAP filter to limit the DNs operated on.", default="(objectClass=*)")
+parser.add_argument('--filter', nargs=1, help="An LDAP filter to limit the DNs operated on.",
+                    default="(objectClass=*)")
 parser.add_argument('change_attr', nargs=1, help="The attribute to be changed.")
 parser.add_argument('regexp', nargs=1, help="A regexp used to determine the new value of change_attr.")
 parser.add_argument('replace', nargs=1, help="The value to substitute into the new value of change_attr.")
+
+CONFIG_KEYS = ['host', 'port', 'bind_dn', 'password', 'base_dn']
 
 
 def main():
@@ -47,33 +49,41 @@ def main():
     connection.unbind()
 
 
+def error(msg, *args, **kwargs):
+    print(msg.format(*args, **kwargs), file=sys.stderr)
+
+
 def load_config(args):
     # Load any environment configurations.
     config = configparser.ConfigParser()
     config.read(['.ldap_envs', os.path.expanduser('~/.ldap_envs')])
     # Build a record of the target environment.
-    if args.environment is not None and args.environment in config:
-        target = config[args.environment]
+    if args.environment is not None:
+        try:
+            target = config[args.environment].copy()
+        except KeyError:
+            error("Error: environment {} does not exist", args.environment)
+            sys.exit(1)
     else:
-        # TODO: Where it make sense, make command line args overwrite .ldap_envs values.
-        target = {
-            'host': args.host,
-            'port': args.port,
-            'bind_dn': args.bind_dn,
-            'password': args.password,
-            'base_dn': args.base_dn,
-        }
+        # Default all values to None
+        target = dict.fromkeys(CONFIG_KEYS)
+
+    # Overwrite default/environment config values with contents of args
+    for config_key in CONFIG_KEYS:
+        if getattr(args, config_key) is not None:
+            target[config_key] = getattr(args, config_key)
 
     # Make sure we have all the necessary parameters one way or another.
     soft_fail = False
-    for key in target.keys():
-        if target[key] is None:
-            print("No value for parameter: " + key)
+    for key, value in target.items():
+        if value is None:
+            error("No value for parameter: {}", key)
             soft_fail = True
 
-    # If we hit a soft fail condition die out.
     if soft_fail:
         sys.exit(1)
+
+    return target
 
 
 def connect(args, target):
