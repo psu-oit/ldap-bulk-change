@@ -17,24 +17,24 @@ parser.add_argument('--verbose', '-v', action='count',
                     help="Set the verbosity level.")
 parser.add_argument('--nossl', action="store_true",
                     help="Connect without SSL.")
-parser.add_argument('--environment', '-e', nargs="?",
+parser.add_argument('--environment', '-e',
                     help="Use one of the environments defined in ~/.ldap_envs instead.")
 # TODO: Add dry-run option to show what changes would be made.
 # TODO: Make verbose do something.
 
 # Command line environment options.
-parser.add_argument('--host', nargs='?', help="The LDAP host URL.")
-parser.add_argument('--port', nargs='?', help="The LDAP port.", default="636")
-parser.add_argument('--bind-dn', nargs='?', help="The DN to bind as.")
-parser.add_argument('--password', nargs='?', help="The password for the bind DN.")
-parser.add_argument('--base-dn', nargs='?', help="The base DN from which to search.")
+parser.add_argument('--host', help="The LDAP host URL.")
+parser.add_argument('--port', help="The LDAP port.", default="636")
+parser.add_argument('--bind-dn', help="The DN to bind as.")
+parser.add_argument('--password', help="The password for the bind DN.")
+parser.add_argument('--base-dn', help="The base DN from which to search.")
 
 # The action we actually want to take.
-parser.add_argument('--filter', nargs=1, help="An LDAP filter to limit the DNs operated on.",
+parser.add_argument('--filter', help="An LDAP filter to limit the DNs operated on.",
                     default="(objectClass=*)")
-parser.add_argument('change_attr', nargs=1, help="The attribute to be changed.")
-parser.add_argument('regexp', nargs=1, help="A regexp used to determine the new value of change_attr.")
-parser.add_argument('replace', nargs=1, help="The value to substitute into the new value of change_attr.")
+parser.add_argument('change_attr', help="The attribute to be changed.")
+parser.add_argument('regexp', help="A regexp used to determine the new value of change_attr.")
+parser.add_argument('replace', help="The value to substitute into the new value of change_attr.")
 
 CONFIG_KEYS = ['host', 'port', 'bind_dn', 'password', 'base_dn']
 
@@ -99,26 +99,26 @@ def connect(args, target):
 
 def search(args, target, connection):
     # Find our set of target DNs.
-    connection.search(target['base_dn'], args.filter[0],
+    connection.search(target['base_dn'], args.filter,
                       attributes=args.change_attr)
 
     results = {}
     for record in connection.response:
-        results[record['dn']] = record['attributes'][args.change_attr[0]]
+        results[record['dn']] = record['attributes'][args.change_attr]
 
     return results
 
 
 def apply_regex(args, search_results):
-    regexp = re.compile(args.regexp[0])
+    regexp = re.compile(args.regexp)
     change_set = {}
 
     for dn in search_results:
-        new_values = [regexp.sub(args.replace[0], attr)
+        new_values = [regexp.sub(args.replace, attr)
                       for attr in change_set[dn]]
 
         change_set[dn] = {
-            args.change_attr[0]: (MODIFY_REPLACE, new_values),
+            args.change_attr: (MODIFY_REPLACE, new_values),
         }
 
     return change_set
