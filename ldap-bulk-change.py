@@ -19,6 +19,8 @@ parser.add_argument('--nossl', action="store_true",
                     help="Connect without SSL.")
 parser.add_argument('--environment', '-e',
                     help="Use one of the environments defined in ~/.ldap_envs instead.")
+parser.add_argument('--dry-run', '-n', action="store_true",
+                    help="Do not make changes")
 # TODO: Add dry-run option to show what changes would be made.
 # TODO: Make verbose do something.
 
@@ -127,7 +129,8 @@ def apply_regex(args, search_results):
 def commit(args, connection, change_set):
     # Set the new values in LDAP.
     for dn in change_set:
-        connection.modify(dn, change_set[dn])
+        if not args.dry_run:
+            connection.modify(dn, change_set[dn])
         print("Modify: {}: {}".format(dn, connection.result['description']))
 
 
