@@ -5,15 +5,18 @@ import sys
 import argparse
 import configparser
 import re
+import logging
 
 # http://pythonhosted.org/python3-ldap/
 from ldap3 import Connection, Server, MODIFY_REPLACE
 
 __author__ = 'hhauer'
 
+logger = logging.getLogger(__name__)
+
 # Start by setting up argparse
 parser = argparse.ArgumentParser(description='Make a bulk change to users in LDAP.')
-parser.add_argument('--verbose', '-v', action='count',
+parser.add_argument('--verbose', '-v', action='count', default=0,
                     help="Set the verbosity level.")
 parser.add_argument('--nossl', action="store_true",
                     help="Connect without SSL.")
@@ -43,16 +46,25 @@ CONFIG_KEYS = ['host', 'port', 'bind_dn', 'password', 'base_dn']
 
 def main():
     args = parser.parse_args()
+    setup_logging(args)
+    if args.dry_run:
+        logger.info("Dry run mode, no changes will be made")
     target = load_config(args)
     connection = connect(args, target)
     search_results = search(args, target, connection)
     change_set = apply_regex(args, search_results)
     commit(args, connection, change_set)
-    connection.unbind()
+    disconnect(connection)
 
 
-def error(msg, *args, **kwargs):
-    print(msg.format(*args, **kwargs), file=sys.stderr)
+def setup_logging(args):
+    levels = {
+        0: logging.CRITICAL,
+        1: logging.INFO,
+        2: logging.DEBUG
+    }
+    logger.setLevel(levels.get(args.verbose, logging.DEBUG))
+    logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def load_config(args):
@@ -62,12 +74,14 @@ def load_config(args):
     # Build a record of the target environment.
     if args.environment is not None:
         try:
-            target = config[args.environment].copy()
+            logger.debug("Reading from environment %s", args.environment)
+            target = dict(config[args.environment])
         except KeyError:
-            error("Error: environment {} does not exist", args.environment)
+            logger.critical("environment %s does not exist", args.environment)
             sys.exit(1)
     else:
         # Default all values to None
+        logger.info("No environment given, reading from CLI flags")
         target = dict.fromkeys(CONFIG_KEYS)
 
     # Overwrite default/environment config values with contents of args
@@ -79,7 +93,7 @@ def load_config(args):
     soft_fail = False
     for key, value in target.items():
         if value is None:
-            error("No value for parameter: {}", key)
+            logger.critical("No value for parameter: %s", key)
             soft_fail = True
 
     if soft_fail:
@@ -90,11 +104,15 @@ def load_config(args):
 
 def connect(args, target):
     # Open a connection to the LDAP server.
+    logger.debug("Connecting to %s:%s, SSL=%r", target['host'], target['port'],
+                 not args.nossl)
     if args.nossl:
         server = Server(target['host'], port=int(target['port']))
     else:
         server = Server(target['host'], port=int(target['port']), use_ssl=True)
 
+    logger.debug("Authenticating with user=%s, password=<omitted>",
+                 target['bind_dn'])
     return Connection(server, user=target['bind_dn'],
                       password=target['password'], auto_bind=True)
 
@@ -102,11 +120,13 @@ def connect(args, target):
 def search(args, target, connection):
     # Find our set of target DNs.
     connection.search(target['base_dn'], args.filter,
-                      attributes=args.change_attr)
+                      attributes=[args.change_attr])
 
     results = {}
     for record in connection.response:
         results[record['dn']] = record['attributes'][args.change_attr]
+
+    logger.info("Retrieved %d records", len(results))
 
     return results
 
@@ -115,9 +135,9 @@ def apply_regex(args, search_results):
     regexp = re.compile(args.regexp)
     change_set = {}
 
-    for dn in search_results:
+    for dn, attributes in search_results.items():
         new_values = [regexp.sub(args.replace, attr)
-                      for attr in change_set[dn]]
+                      for attr in attributes]
 
         change_set[dn] = {
             args.change_attr: (MODIFY_REPLACE, new_values),
@@ -128,11 +148,17 @@ def apply_regex(args, search_results):
 
 def commit(args, connection, change_set):
     # Set the new values in LDAP.
-    for dn in change_set:
-        if not args.dry_run:
-            connection.modify(dn, change_set[dn])
-        print("Modify: {}: {}".format(dn, connection.result['description']))
+    for dn, attributes in change_set.items():
+        if args.dry_run:
+            logger.info("Would modify %s", dn)
+        else:
+            connection.modify(dn, attributes)
+            logger.info("Modify: %s: %s", dn,
+                        connection.result['description'])
 
+def disconnect(connection):
+    logger.debug("Disconnecting from server")
+    connection.unbind()
 
 if __name__ == "__main__":
     main()
