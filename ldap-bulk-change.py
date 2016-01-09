@@ -23,7 +23,7 @@ parser.add_argument('--nossl', action="store_true",
 parser.add_argument('--environment', '-e',
                     help="Use one of the environments defined in ~/.ldap_envs instead.")
 parser.add_argument('--dry-run', '-n', action="store_true",
-                    help="Do not make changes")
+                    help="Do not make changes, use with -v")
 parser.add_argument('--log', '-l',
                     help="Log to file instead of stdout, overwrites file")
 # TODO: Add dry-run option to show what changes would be made.
@@ -155,15 +155,18 @@ def commit(args, connection, change_set):
     # Set the new values in LDAP.
     for dn, attributes in change_set.items():
         if args.dry_run:
-            logger.info("Would modify %s", dn)
+            logger.info("Would modify %s: %r", dn, attributes)
         else:
+            logger.info("Modifying %s with %r", dn, attributes)
             connection.modify(dn, attributes)
-            logger.info("Modify: %s: %s", dn,
+            logger.info("Modified: %s: %s", dn,
                         connection.result['description'])
+
 
 def disconnect(connection):
     logger.debug("Disconnecting from server")
     connection.unbind()
+
 
 if __name__ == "__main__":
     main()
