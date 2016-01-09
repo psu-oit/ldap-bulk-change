@@ -24,6 +24,8 @@ parser.add_argument('--environment', '-e',
                     help="Use one of the environments defined in ~/.ldap_envs instead.")
 parser.add_argument('--dry-run', '-n', action="store_true",
                     help="Do not make changes")
+parser.add_argument('--log', '-l',
+                    help="Log to file instead of stdout, overwrites file")
 # TODO: Add dry-run option to show what changes would be made.
 # TODO: Make verbose do something.
 
@@ -64,7 +66,10 @@ def setup_logging(args):
         2: logging.DEBUG
     }
     logger.setLevel(levels.get(args.verbose, logging.DEBUG))
-    logger.addHandler(logging.StreamHandler(sys.stdout))
+    if args.log:
+        logger.addHandler(logging.FileHandler(args.log, mode="w"))
+    else:
+        logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def load_config(args):
