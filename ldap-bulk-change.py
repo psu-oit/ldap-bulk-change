@@ -141,8 +141,11 @@ def apply_regex(args, search_results):
     change_set = {}
 
     for dn, attributes in search_results.items():
-        new_values = [regexp.sub(args.replace, attr)
-                      for attr in attributes]
+        new_values = []
+        for attr in attributes:
+            new_attr = regexp.sub(args.replace, attr)
+            logger.info("Would modify %s: %r -> %r", dn, attr, new_attr)
+            new_values.append(new_attr)
 
         change_set[dn] = {
             args.change_attr: (MODIFY_REPLACE, new_values),
@@ -152,11 +155,9 @@ def apply_regex(args, search_results):
 
 
 def commit(args, connection, change_set):
-    # Set the new values in LDAP.
-    for dn, attributes in change_set.items():
-        if args.dry_run:
-            logger.info("Would modify %s: %r", dn, attributes)
-        else:
+    if not args.dry_run:
+        # Set the new values in LDAP.
+        for dn, attributes in change_set.items():
             logger.info("Modifying %s with %r", dn, attributes)
             connection.modify(dn, attributes)
             logger.info("Modified: %s: %s", dn,
