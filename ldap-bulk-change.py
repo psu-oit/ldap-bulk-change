@@ -67,7 +67,7 @@ def setup_logging(args):
     }
     logger.setLevel(levels.get(args.verbose, logging.DEBUG))
     if args.log:
-        logger.addHandler(logging.FileHandler(args.log, mode="w"))
+        logger.addHandler(logging.FileHandler(args.log))
     else:
         logger.addHandler(logging.StreamHandler(sys.stdout))
 
