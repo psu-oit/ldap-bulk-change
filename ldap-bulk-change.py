@@ -142,14 +142,19 @@ def apply_regex(args, search_results):
 
     for dn, attributes in search_results.items():
         new_values = []
+        should_change = False
         for attr in attributes:
             new_attr = regexp.sub(args.replace, attr)
+            should_change = True
             logger.info("Would modify %s: %r -> %r", dn, attr, new_attr)
             new_values.append(new_attr)
 
-        change_set[dn] = {
-            args.change_attr: (MODIFY_REPLACE, new_values),
-        }
+        if should_change:
+            change_set[dn] = {
+                args.change_attr: (MODIFY_REPLACE, new_values),
+            }
+        else:
+            logger.info("Skipping %s: No change necessary")
 
     return change_set
 
