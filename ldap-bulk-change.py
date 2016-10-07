@@ -145,8 +145,11 @@ def apply_regex(args, search_results):
         should_change = False
         for attr in attributes:
             new_attr = regexp.sub(args.replace, attr)
-            should_change = True
-            logger.info("Would modify %s: %r -> %r", dn, attr, new_attr)
+            if new_attr != attr:
+                should_change = True
+                logger.info("Would modify %s: %r -> %r", dn, attr, new_attr)
+            else:
+                logger.info("Not modifying %s value: %r", dn, attr)
             new_values.append(new_attr)
 
         if should_change:
@@ -154,7 +157,7 @@ def apply_regex(args, search_results):
                 args.change_attr: (MODIFY_REPLACE, new_values),
             }
         else:
-            logger.info("Skipping %s: No change necessary")
+            logger.info("Skipping %s: No change necessary", dn)
 
     return change_set
 
